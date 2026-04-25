@@ -161,7 +161,7 @@
     color: #b5b0a8;
   }
 
-  /* Notes area */
+  /* Extra informatie rows */
   .notes-area {
     margin: 0;
     flex: 1;
@@ -172,15 +172,114 @@
   .notes-label {
     font-weight: 600;
     font-size: 14px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     display: block;
   }
 
-  textarea {
-    resize: vertical;
-    min-height: 120px;
+  .rows-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .info-row .row-desc {
     flex: 1;
-    line-height: 1.6;
+  }
+
+  .info-row .row-price {
+    width: 110px;
+    text-align: right;
+  }
+
+  /* hide number spinners */
+  .row-price::-webkit-inner-spin-button,
+  .row-price::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .row-price { -moz-appearance: textfield; appearance: textfield; }
+
+  .btn-remove-row {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 2px;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+
+  .btn-remove-row:hover {
+    color: var(--accent);
+  }
+
+  .btn-add-row {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    background: none;
+    border: 1.5px dashed var(--field-border);
+    border-radius: var(--radius);
+    padding: 7px 16px;
+    cursor: pointer;
+    margin-top: 10px;
+    align-self: flex-start;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .btn-add-row:hover {
+    border-color: var(--accent);
+    background: rgba(184, 50, 46, 0.04);
+  }
+
+  /* Price summary */
+  .price-summary {
+    display: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1.5px solid var(--line);
+  }
+
+  .price-summary.visible {
+    display: flex;
+  }
+
+  .price-line {
+    display: flex;
+    gap: 20px;
+    align-items: baseline;
+    font-size: 14px;
+  }
+
+  .price-line .price-label {
+    color: var(--muted);
+  }
+
+  .price-line .price-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-width: 90px;
+    text-align: right;
+  }
+
+  .price-line.total-line .price-label {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .price-line.total-line .price-value {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
   }
 
   /* Footer */
@@ -235,6 +334,7 @@
     .field-grid { grid-template-columns: 1fr; }
     .footer-info { flex-direction: column; gap: 6px; }
     .field-group label { min-width: 100px; }
+    .info-row .row-price { width: 90px; }
   }
 </style>
 </head>
@@ -285,10 +385,21 @@
 
   <hr class="divider">
 
-  <!-- Notes -->
+  <!-- Extra informatie rows -->
   <div class="notes-area">
-    <label class="notes-label" for="notes">Extra informatie:</label>
-    <textarea id="notes" placeholder="Schrijf hier eventuele opmerkingen, werkzaamheden, onderdelen..."></textarea>
+    <span class="notes-label">Extra informatie:</span>
+    <div id="rows-container" class="rows-container"></div>
+    <button type="button" class="btn-add-row" onclick="addRow()">+ Rij toevoegen</button>
+    <div class="price-summary" id="price-summary">
+      <div class="price-line">
+        <span class="price-label">Excl. BTW (21%):</span>
+        <span class="price-value" id="total-excl">€0.00</span>
+      </div>
+      <div class="price-line total-line">
+        <span class="price-label">Totaal incl. BTW:</span>
+        <span class="price-value" id="total-incl">€0.00</span>
+      </div>
+    </div>
   </div>
 
   <hr class="divider">
@@ -305,6 +416,58 @@
 </div>
 
 <script>
+function addRow() {
+  const container = document.getElementById('rows-container');
+  const row = document.createElement('div');
+  row.className = 'info-row';
+  row.innerHTML =
+    '<input type="text" class="row-desc" placeholder="Omschrijving...">' +
+    '<input type="number" class="row-price" placeholder="Prijs (€)" min="0" step="0.01" oninput="updateTotals()">' +
+    '<button type="button" class="btn-remove-row" onclick="removeRow(this)" title="Verwijder rij">×</button>';
+  container.appendChild(row);
+  updateTotals();
+}
+
+function removeRow(btn) {
+  btn.closest('.info-row').remove();
+  updateTotals();
+}
+
+function updateTotals() {
+  const priceInputs = document.querySelectorAll('.row-price');
+  let total = 0;
+  let hasPrice = false;
+  priceInputs.forEach(input => {
+    const v = Number.parseFloat(input.value);
+    if (v > 0) {
+      total += v;
+      hasPrice = true;
+    }
+  });
+
+  const summary = document.getElementById('price-summary');
+  if (hasPrice) {
+    summary.classList.add('visible');
+    document.getElementById('total-incl').textContent = '€' + total.toFixed(2);
+    document.getElementById('total-excl').textContent = '€' + (total / 1.21).toFixed(2);
+  } else {
+    summary.classList.remove('visible');
+  }
+}
+
+function getRows() {
+  const rows = [];
+  document.querySelectorAll('.info-row').forEach(row => {
+    const desc = row.querySelector('.row-desc').value.trim();
+    const priceRaw = row.querySelector('.row-price').value;
+    const price = priceRaw !== '' ? Number.parseFloat(priceRaw) : null;
+    if (desc || price !== null) {
+      rows.push({ desc, price });
+    }
+  });
+  return rows;
+}
+
 function generatePDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -314,7 +477,6 @@ function generatePDF() {
   const contentW = pw - margin * 2;
   let y = 24;
 
-  // Helpers
   const setFont = (style, size) => {
     doc.setFont('helvetica', style);
     doc.setFontSize(size);
@@ -328,6 +490,7 @@ function generatePDF() {
 
   // --- Header ---
   setFont('bold', 14);
+  doc.setTextColor(30);
   doc.text('FNM Cars Bv', margin, y);
   setFont('normal', 10);
   doc.setTextColor(100);
@@ -385,38 +548,70 @@ function generatePDF() {
   drawField('Chassisnummer:', chassis, col1X, y);
   drawField('Kilometers:', km, col2X, y);
 
-  // Adjust label width for chassisnummer
-  // Re-draw chassisnummer with wider label
-  setFont('bold', 10);
-  doc.setTextColor(30);
-  // already drawn above with labelW=36, but chassisnummer is longer
-  // Let's just accept – jsPDF will overlay. Let me fix by clearing area first.
-  // Actually it's fine since we draw sequentially. The labelW for 'Chassisnummer:' needs to be wider.
-  // We'll accept the slight offset since jsPDF handles it.
-
   y += 8;
   drawLine(y);
   y += 10;
 
-  // --- Notes ---
-  const notes = document.getElementById('notes').value;
+  // --- Extra informatie rows ---
   setFont('bold', 10);
   doc.setTextColor(30);
   doc.text('Extra informatie:', margin, y);
   y += 7;
 
-  if (notes) {
+  const rows = getRows();
+  const priceColX = pw - margin;
+  const descMaxW = contentW - 32;
+
+  let totalIncl = 0;
+  let hasPrice = false;
+
+  rows.forEach(row => {
     setFont('normal', 10);
     doc.setTextColor(60);
-    const lines = doc.splitTextToSize(notes, contentW);
-    doc.text(lines, margin, y);
-    y += lines.length * 5.2;
+
+    const descLines = doc.splitTextToSize(row.desc || '', descMaxW);
+    doc.text(descLines, margin, y);
+
+    if (row.price !== null && !Number.isNaN(row.price)) {
+      setFont('normal', 10);
+      doc.setTextColor(30);
+      doc.text('€' + row.price.toFixed(2), priceColX, y, { align: 'right' });
+      totalIncl += row.price;
+      hasPrice = true;
+    }
+
+    y += Math.max(descLines.length, 1) * 5.5 + 1.5;
+  });
+
+  // Price summary (bottom-right of extra info section)
+  if (hasPrice) {
+    const totalExcl = totalIncl / 1.21;
+    y += 3;
+    // Draw a short separator line only on the right side
+    doc.setDrawColor(180, 175, 168);
+    doc.setLineWidth(0.3);
+    doc.line(pw - margin - 60, y, pw - margin, y);
+    y += 5;
+
+    const valueX = pw - margin;
+    const labelX = valueX - 28;
+
+    setFont('normal', 9);
+    doc.setTextColor(100);
+    doc.text('Excl. BTW (21%):', labelX, y, { align: 'right' });
+    setFont('bold', 9);
+    doc.setTextColor(30);
+    doc.text('€' + totalExcl.toFixed(2), valueX, y, { align: 'right' });
+    y += 5.5;
+
+    setFont('bold', 10);
+    doc.setTextColor(30);
+    doc.text('Totaal incl. BTW:', labelX, y, { align: 'right' });
+    doc.text('€' + totalIncl.toFixed(2), valueX, y, { align: 'right' });
+    y += 6;
   }
 
-  // Ensure minimum space for notes area
-  // (notes content already rendered above)
-
-  // --- Footer (always at bottom of A4 page) --
+  // --- Footer (always at bottom of A4 page) ---
   const pageH = 297;
   const footerY = pageH - 18;
 
@@ -431,8 +626,9 @@ function generatePDF() {
   doc.save(filename);
 }
 
-// Set today's date as default
+// Initialise
 document.getElementById('datum').valueAsDate = new Date();
+addRow();
 </script>
 
 </body>
