@@ -169,11 +169,44 @@
     flex-direction: column;
   }
 
+  .notes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
   .notes-label {
     font-weight: 600;
     font-size: 14px;
-    margin-bottom: 10px;
-    display: block;
+  }
+
+  .mode-toggle {
+    display: flex;
+    border: 1.5px solid var(--field-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .mode-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--field-bg);
+    border: none;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .mode-btn + .mode-btn {
+    border-left: 1.5px solid var(--field-border);
+  }
+
+  .mode-btn.active {
+    background: var(--accent);
+    color: #fff;
   }
 
   .rows-container {
@@ -385,21 +418,34 @@
 
   <hr class="divider">
 
-  <!-- Extra informatie rows -->
+  <!-- Extra informatie -->
   <div class="notes-area">
-    <span class="notes-label">Extra informatie:</span>
-    <div id="rows-container" class="rows-container"></div>
-    <button type="button" class="btn-add-row" onclick="addRow()">+ Rij toevoegen</button>
-    <div class="price-summary" id="price-summary">
-      <div class="price-line">
-        <span class="price-label">Excl. BTW (21%):</span>
-        <span class="price-value" id="total-excl">€0.00</span>
-      </div>
-      <div class="price-line total-line">
-        <span class="price-label">Totaal incl. BTW:</span>
-        <span class="price-value" id="total-incl">€0.00</span>
+    <div class="notes-header">
+      <span class="notes-label">Extra informatie:</span>
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" id="btn-mode-rows" onclick="setMode('rows')">Rijen + prijs</button>
+        <button type="button" class="mode-btn" id="btn-mode-text" onclick="setMode('text')">Vrije tekst</button>
       </div>
     </div>
+
+    <!-- Rows mode -->
+    <div id="mode-rows">
+      <div id="rows-container" class="rows-container"></div>
+      <button type="button" class="btn-add-row" onclick="addRow()">+ Rij toevoegen</button>
+      <div class="price-summary" id="price-summary">
+        <div class="price-line">
+          <span class="price-label">Excl. BTW (21%):</span>
+          <span class="price-value" id="total-excl">€0.00</span>
+        </div>
+        <div class="price-line total-line">
+          <span class="price-label">Totaal incl. BTW:</span>
+          <span class="price-value" id="total-incl">€0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Free text mode -->
+    <textarea id="notes-text" placeholder="Schrijf hier eventuele opmerkingen, werkzaamheden, onderdelen..." style="display:none; resize:vertical; min-height:140px; line-height:1.6;"></textarea>
   </div>
 
   <hr class="divider">
@@ -416,6 +462,16 @@
 </div>
 
 <script>
+let currentMode = 'rows';
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-rows').style.display = mode === 'rows' ? '' : 'none';
+  document.getElementById('notes-text').style.display = mode === 'text' ? '' : 'none';
+  document.getElementById('btn-mode-rows').classList.toggle('active', mode === 'rows');
+  document.getElementById('btn-mode-text').classList.toggle('active', mode === 'text');
+}
+
 function addRow() {
   const container = document.getElementById('rows-container');
   const row = document.createElement('div');
@@ -552,63 +608,70 @@ function generatePDF() {
   drawLine(y);
   y += 10;
 
-  // --- Extra informatie rows ---
+  // --- Extra informatie ---
   setFont('bold', 10);
   doc.setTextColor(30);
   doc.text('Extra informatie:', margin, y);
   y += 7;
 
-  const rows = getRows();
-  const priceColX = pw - margin;
-  const descMaxW = contentW - 32;
-
-  let totalIncl = 0;
-  let hasPrice = false;
-
-  rows.forEach(row => {
-    setFont('normal', 10);
-    doc.setTextColor(60);
-
-    const descLines = doc.splitTextToSize(row.desc || '', descMaxW);
-    doc.text(descLines, margin, y);
-
-    if (row.price !== null && !Number.isNaN(row.price)) {
+  if (currentMode === 'text') {
+    const notes = document.getElementById('notes-text').value;
+    if (notes) {
       setFont('normal', 10);
-      doc.setTextColor(30);
-      doc.text('€' + row.price.toFixed(2), priceColX, y, { align: 'right' });
-      totalIncl += row.price;
-      hasPrice = true;
+      doc.setTextColor(60);
+      const lines = doc.splitTextToSize(notes, contentW);
+      doc.text(lines, margin, y);
+      y += lines.length * 5.2;
     }
+  } else {
+    const rows = getRows();
+    const priceColX = pw - margin;
+    const descMaxW = contentW - 32;
+    let totalIncl = 0;
+    let hasPrice = false;
 
-    y += Math.max(descLines.length, 1) * 5.5 + 1.5;
-  });
+    rows.forEach(row => {
+      setFont('normal', 10);
+      doc.setTextColor(60);
+      const descLines = doc.splitTextToSize(row.desc || '', descMaxW);
+      doc.text(descLines, margin, y);
 
-  // Price summary (bottom-right of extra info section)
-  if (hasPrice) {
-    const totalExcl = totalIncl / 1.21;
-    y += 3;
-    // Draw a short separator line only on the right side
-    doc.setDrawColor(180, 175, 168);
-    doc.setLineWidth(0.3);
-    doc.line(pw - margin - 60, y, pw - margin, y);
-    y += 5;
+      if (row.price !== null && !Number.isNaN(row.price)) {
+        setFont('normal', 10);
+        doc.setTextColor(30);
+        doc.text('€' + row.price.toFixed(2), priceColX, y, { align: 'right' });
+        totalIncl += row.price;
+        hasPrice = true;
+      }
 
-    const valueX = pw - margin;
-    const labelX = valueX - 28;
+      y += Math.max(descLines.length, 1) * 5.5 + 1.5;
+    });
 
-    setFont('normal', 9);
-    doc.setTextColor(100);
-    doc.text('Excl. BTW (21%):', labelX, y, { align: 'right' });
-    setFont('bold', 9);
-    doc.setTextColor(30);
-    doc.text('€' + totalExcl.toFixed(2), valueX, y, { align: 'right' });
-    y += 5.5;
+    if (hasPrice) {
+      const totalExcl = totalIncl / 1.21;
+      y += 3;
+      doc.setDrawColor(180, 175, 168);
+      doc.setLineWidth(0.3);
+      doc.line(pw - margin - 60, y, pw - margin, y);
+      y += 5;
 
-    setFont('bold', 10);
-    doc.setTextColor(30);
-    doc.text('Totaal incl. BTW:', labelX, y, { align: 'right' });
-    doc.text('€' + totalIncl.toFixed(2), valueX, y, { align: 'right' });
-    y += 6;
+      const valueX = pw - margin;
+      const labelX = valueX - 28;
+
+      setFont('normal', 9);
+      doc.setTextColor(100);
+      doc.text('Excl. BTW (21%):', labelX, y, { align: 'right' });
+      setFont('bold', 9);
+      doc.setTextColor(30);
+      doc.text('€' + totalExcl.toFixed(2), valueX, y, { align: 'right' });
+      y += 5.5;
+
+      setFont('bold', 10);
+      doc.setTextColor(30);
+      doc.text('Totaal incl. BTW:', labelX, y, { align: 'right' });
+      doc.text('€' + totalIncl.toFixed(2), valueX, y, { align: 'right' });
+      y += 6;
+    }
   }
 
   // --- Footer (always at bottom of A4 page) ---
